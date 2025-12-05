@@ -1,0 +1,13 @@
+﻿   Qt/MSBuild: 3.4.1.0
+  Reading Qt configuration (D:/Qt/6.8.3/msvc2022_64/bin/qmake)
+   Qt: 6.8.3
+  uic AudioPlayer.ui
+  rcc AudioPlayer.qrc
+  moc AudioPlayer.h
+   RCC: Warning: No resources in 'C:\Users\fanal\OneDrive\Desktop\ProjectFinalDS\AudioPlayer\AudioPlayer\AudioPlayer\AudioPlayer.qrc'.
+  Miniaudio.cpp
+  AudioPlayer.cpp
+  main.cpp
+  qrc_AudioPlayer.cpp
+  moc_AudioPlayer.cpp
+  AudioPlayer.vcxproj -> C:\Users\fanal\OneDrive\Desktop\ProjectFinalDS\AudioPlayer\AudioPlayer\x64\Debug\AudioPlayer.exe
