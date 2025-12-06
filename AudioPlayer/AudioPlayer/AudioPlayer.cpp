@@ -1,4 +1,4 @@
-﻿#include "AudioPlayer.h"
+#include "AudioPlayer.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QStyle>
@@ -175,7 +175,7 @@ void AudioPlayer::setupUi()
             color: #a6adc8; 
         }
         #AlbumArtLabel {
-            background-color: #d3d3d3; /* Background color from the image area */
+            background-color: #d3d3d3;
             border-radius: 10px;
         }
     )";
@@ -185,15 +185,12 @@ void AudioPlayer::setupUi()
     mainLayout->setSpacing(15);
     mainLayout->setContentsMargins(30, 30, 30, 30);
 
-    // --- 1. Player Container (Left: Art/Controls, Right: Playlist) ---
     QHBoxLayout* playerContainerLayout = new QHBoxLayout();
 
-    // LEFT COLUMN: Album Art and Main Controls
     QVBoxLayout* leftColumnLayout = new QVBoxLayout();
     leftColumnLayout->setSpacing(15);
     leftColumnLayout->setAlignment(Qt::AlignTop);
 
-    // Album Art Area (Drawing the two circles as seen in the image)
     albumArtLabel = new QLabel(this);
     albumArtLabel->setObjectName("AlbumArtLabel");
     albumArtLabel->setFixedSize(140, 140);
@@ -204,19 +201,15 @@ void AudioPlayer::setupUi()
     QPainter painter(&albumArt);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // Draw the main placeholder graphic (looks like a mountain/placeholder icon)
     painter.setPen(QPen(QColor("#a9a9a9"), 1));
     painter.setBrush(QColor("#f0f0f0"));
     QPointF points[] = { QPointF(0, 140), QPointF(70, 70), QPointF(140, 140) };
     painter.drawPolygon(points, 3);
 
-    // Draw the two circles 
-    // Large circle (Ring)
     painter.setPen(QPen(QColor("#a9a9a9"), 2));
     painter.setBrush(Qt::NoBrush);
     painter.drawEllipse(QPoint(70, 40), 18, 18);
 
-    // Inner small circle
     painter.setBrush(QColor("#a9a9a9"));
     painter.drawEllipse(QPoint(70, 40), 5, 5);
 
@@ -225,49 +218,41 @@ void AudioPlayer::setupUi()
     albumArtLabel->setPixmap(albumArt);
     albumArtLabel->setAlignment(Qt::AlignCenter);
 
-    // --- Playback Controls Layout --- 
-    // Order: Prev (<|), Restart (⟲), Play/Pause (>||), Next (|>)
     QHBoxLayout* mainControlsLayout = new QHBoxLayout();
 
-    // Prev Button
     prevBtn = new QPushButton(this);
     prevBtn->setIcon(style()->standardIcon(QStyle::SP_MediaSkipBackward));
     prevBtn->setFixedSize(30, 30);
     prevBtn->setIconSize(QSize(20, 20));
     prevBtn->setStyleSheet("border-radius: 15px;");
 
-    // Restart Button (Redo icon, positioned next to Prev)
     restartBtn = new QPushButton(this);
     restartBtn->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
     restartBtn->setFixedSize(30, 30);
     restartBtn->setIconSize(QSize(20, 20));
     restartBtn->setStyleSheet("border-radius: 15px; border: 2px solid #ed6c74;");
 
-    // Play/Pause Button
     playBtn = new QPushButton(this);
     playBtn->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     playBtn->setFixedSize(45, 45);
     playBtn->setIconSize(QSize(28, 28));
     playBtn->setStyleSheet("border-radius: 22px;");
 
-    // Next Button
     nextBtn = new QPushButton(this);
     nextBtn->setIcon(style()->standardIcon(QStyle::SP_MediaSkipForward));
     nextBtn->setFixedSize(30, 30);
     nextBtn->setIconSize(QSize(20, 20));
     nextBtn->setStyleSheet("border-radius: 15px;");
 
-    // Stop button (declared but not added to the layout)
     stopBtn = new QPushButton(this);
 
     mainControlsLayout->addStretch();
     mainControlsLayout->addWidget(prevBtn);
-    mainControlsLayout->addWidget(restartBtn); // Positioned to the left of Play button
+    mainControlsLayout->addWidget(restartBtn);
     mainControlsLayout->addWidget(playBtn);
     mainControlsLayout->addWidget(nextBtn);
     mainControlsLayout->addStretch();
 
-    // Seek Slider Layout 
     currentTimeLabel = new QLabel("00:00", this);
     totalTimeLabel = new QLabel("00:00", this);
     seekSlider = new QSlider(Qt::Horizontal, this);
@@ -282,7 +267,6 @@ void AudioPlayer::setupUi()
     leftColumnLayout->addLayout(mainControlsLayout);
     leftColumnLayout->addLayout(seekTimeLayout);
 
-    // RIGHT COLUMN: Playlist
     playlistWidget = new QListWidget(this);
     playlistWidget->setMinimumHeight(200);
     connect(playlistWidget, &QListWidget::itemDoubleClicked, this, &AudioPlayer::onPlaylistDoubleClicked);
@@ -293,8 +277,6 @@ void AudioPlayer::setupUi()
     playerContainerLayout->setStretchFactor(playlistWidget, 2);
 
     mainLayout->addLayout(playerContainerLayout);
-
-    // --- 2. Lower Controls and Status ---
 
     QHBoxLayout* selectorLayout = new QHBoxLayout();
     playlistSelector = new QComboBox(this);
@@ -309,12 +291,10 @@ void AudioPlayer::setupUi()
     selectorLayout->addWidget(createPlaylistBtn);
     selectorLayout->addWidget(renamePlaylistBtn);
 
-    // Status Label
     statusLabel = new QLabel("القائمة جاهزة", this);
     statusLabel->setAlignment(Qt::AlignCenter);
     statusLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #fab387;");
 
-    // Add/Delete and Volume Controls
     QHBoxLayout* controlsLayout = new QHBoxLayout();
     QLabel* volIcon = new QLabel("🔊", this);
     volumeSlider = new QSlider(Qt::Horizontal, this);
@@ -338,8 +318,6 @@ void AudioPlayer::setupUi()
     mainLayout->addWidget(statusLabel);
     mainLayout->addLayout(controlsLayout);
 
-
-    // --- 3. Connect Signals ---
     connect(playlistSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
         this, &AudioPlayer::playlistSelectionChanged);
     connect(createPlaylistBtn, &QPushButton::clicked, this, &AudioPlayer::createNewPlaylistClicked);
@@ -375,23 +353,32 @@ void AudioPlayer::createNewPlaylistClicked()
 
 void AudioPlayer::renamePlaylist(const QString& oldName, const QString& newName) {
     if (oldName == newName) return;
+    if (!allPlaylists.contains(oldName)) return;
 
-    // 1. Get the playlist data
-    Playlist listToRename = allPlaylists.take(oldName);
+    // CRITICAL FIX: Update activePlaylist pointer BEFORE modifying the map
+    bool wasActive = (activePlaylist && activePlaylist->name == oldName);
 
-    // 2. Update the name and re-insert
+    // Get a copy of the playlist data
+    Playlist listToRename = allPlaylists[oldName];
+
+    // Update the name
     listToRename.name = newName;
+
+    // Remove old entry and insert new one
+    allPlaylists.remove(oldName);
     allPlaylists.insert(newName, listToRename);
 
-    // 3. Update the QComboBox (Selector)
-    int index = playlistSelector->findText(oldName);
-    if (index != -1) {
-        playlistSelector->setItemText(index, newName);
+    // Update the activePlaylist pointer to the new location in the map
+    if (wasActive) {
+        activePlaylist = &allPlaylists[newName];
     }
 
-    // 4. Update activePlaylist pointer if necessary
-    if (activePlaylist && activePlaylist->name == oldName) {
-        activePlaylist = &allPlaylists[newName];
+    // Update the QComboBox
+    int index = playlistSelector->findText(oldName);
+    if (index != -1) {
+        QIcon icon = playlistSelector->itemIcon(index);
+        playlistSelector->setItemText(index, newName);
+        playlistSelector->setItemIcon(index, icon);
     }
 }
 
@@ -467,7 +454,6 @@ void AudioPlayer::addSurahClicked()
 
     QString baseName = fileInfo.fileName();
 
-
     SurahNode* current = activePlaylist->head;
     while (current != nullptr) {
         if (current->path == filePath) {
@@ -476,7 +462,6 @@ void AudioPlayer::addSurahClicked()
         }
         current = current->next;
     }
-
 
     addSurahToActiveList(baseName, filePath, true);
 
@@ -513,6 +498,7 @@ bool AudioPlayer::deleteSurahFromActiveList(const QString& name)
     delete current;
     return true;
 }
+
 void AudioPlayer::deleteSurahClicked()
 {
     QListWidgetItem* item = playlistWidget->currentItem();
@@ -541,25 +527,19 @@ void AudioPlayer::deleteSurahClicked()
 
     QString surahNameInList = nodeToDelete->name;
 
-
     if (currentSurah && currentSurah->name == surahNameInList) {
         stopClicked();
         currentSurah = nullptr;
     }
 
-
     if (deleteSurahFromActiveList(surahNameInList)) {
         delete playlistWidget->takeItem(playlistWidget->row(item));
         QMessageBox::information(this, "نجاح", "تم حذف السورة بنجاح.");
 
-
         for (int i = 0; i < playlistWidget->count(); ++i) {
             QListWidgetItem* currentItem = playlistWidget->item(i);
             QString oldText = currentItem->text();
-
-
             QString baseName = oldText.section('.', 1).trimmed();
-
             currentItem->setText(QString::number(i + 1) + ". " + baseName);
         }
     }
@@ -614,7 +594,7 @@ bool AudioPlayer::loadTrack(SurahNode* node) {
 
 void AudioPlayer::playPauseClicked() {
     if (!isLoaded) {
-        if (activePlaylist->head == nullptr) return;
+        if (!activePlaylist || activePlaylist->head == nullptr) return;
         loadTrack(activePlaylist->head);
     }
 
@@ -650,13 +630,11 @@ void AudioPlayer::stopClicked() {
 void AudioPlayer::restartClicked() {
     if (isLoaded) {
         seekTo(0);
-        // If paused, restart playing
         if (!isPlaying) {
             playPauseClicked();
         }
     }
     else if (activePlaylist && activePlaylist->head) {
-        // If nothing is loaded, load the first track and start playing
         if (loadTrack(activePlaylist->head)) {
             playPauseClicked();
         }
@@ -668,13 +646,10 @@ void AudioPlayer::updateProgress() {
         ma_uint64 cursor;
         ::ma_decoder_get_cursor_in_pcm_frames(&audioDecoder, &cursor);
 
-        // --- Auto-Next Track Logic (Confirmed) ---
-        // If the current cursor is near the end (within 1000 frames), trigger next track.
         if (totalFrames > 0 && cursor >= (totalFrames - 1000)) {
             nextClicked();
             return;
         }
-        // ------------------------------------------
 
         seekSlider->blockSignals(true);
         seekSlider->setValue((int)cursor);
