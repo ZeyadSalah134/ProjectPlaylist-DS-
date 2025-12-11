@@ -27,14 +27,15 @@ AudioPlayer::AudioPlayer(QWidget* parent) : QWidget(parent)
     currentSurah = nullptr;
     isPlaying = false;
     isLoaded = false;
+    lastCursor = 0;
+    stuckCounter = 0;
 
     timer = new QTimer(this);
+    timer->setInterval(100);  // Check every 100ms
     connect(timer, &QTimer::timeout, this, &AudioPlayer::updateProgress);
 
     setupUi();
-
     setupDefaultPlaylists();
-
     updateUiState();
 
     if (!allPlaylists.isEmpty()) {
@@ -50,6 +51,41 @@ AudioPlayer::~AudioPlayer()
     }
 }
 
+void AudioPlayer::keyPressEvent(QKeyEvent* event)
+{
+    // Check for lowercase letters by getting the text
+    QString keyText = event->text().toLower();
+
+    if (keyText == "p") {
+        playPauseClicked();
+        return;
+    }
+    else if (keyText == "r") {
+        restartClicked();
+        return;
+    }
+
+    // Handle other keys
+    switch (event->key()) {
+    case Qt::Key_Space:
+        playPauseClicked();
+        break;
+    case Qt::Key_Right:
+        nextClicked();
+        break;
+    case Qt::Key_Left:
+        prevClicked();
+        break;
+    case Qt::Key_Up:
+        volumeSlider->setValue(qMin(100, volumeSlider->value() + 5));
+        break;
+    case Qt::Key_Down:
+        volumeSlider->setValue(qMax(0, volumeSlider->value() - 5));
+        break;
+    default:
+        QWidget::keyPressEvent(event);
+    }
+}
 
 void AudioPlayer::setupDefaultPlaylists()
 {
@@ -82,6 +118,7 @@ void AudioPlayer::setupDefaultPlaylists()
         playlistSelector->addItem(QIcon(it.value().iconPath), it.key());
     }
 }
+
 void AudioPlayer::addSurahToActiveList(QString name, QString filename, bool isAbsolutePath)
 {
     if (!activePlaylist) return;
@@ -106,6 +143,7 @@ void AudioPlayer::addSurahToActiveList(QString name, QString filename, bool isAb
         playlistWidget->addItem(QString::number(playlistWidget->count() + 1) + ". " + name);
     }
 }
+
 void AudioPlayer::deleteList(Playlist& list)
 {
     SurahNode* current = list.head;
@@ -120,8 +158,8 @@ void AudioPlayer::deleteList(Playlist& list)
 
 void AudioPlayer::setupUi()
 {
-    setWindowTitle("المصحف المرتل");
-    resize(550, 450);
+    setWindowTitle("The QuranPlaylist");
+    resize(550, 500);
 
     QString cssStyle = R"(
         QWidget { 
@@ -177,6 +215,14 @@ void AudioPlayer::setupUi()
         #AlbumArtLabel {
             background-color: #d3d3d3;
             border-radius: 10px;
+        }
+        #ShortcutsLabel {
+            background-color: #252537;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            color: #a6adc8;
+            border: 1px solid #303040;
         }
     )";
     setStyleSheet(cssStyle);
@@ -263,9 +309,21 @@ void AudioPlayer::setupUi()
     seekTimeLayout->addWidget(seekSlider);
     seekTimeLayout->addWidget(totalTimeLabel);
 
+    // Keyboard shortcuts label
+    shortcutsLabel = new QLabel(this);
+    shortcutsLabel->setObjectName("ShortcutsLabel");
+    shortcutsLabel->setText(
+        "⌨️ اختصارات لوحة المفاتيح:\n"
+        "Space / p = تشغيل/إيقاف | r = إعادة\n"
+        "→ = التالي | ← = السابق | ↑ = رفع الصوت | ↓ = خفض الصوت"
+    );
+    shortcutsLabel->setAlignment(Qt::AlignCenter);
+    shortcutsLabel->setWordWrap(true);
+
     leftColumnLayout->addWidget(albumArtLabel, 0, Qt::AlignCenter);
     leftColumnLayout->addLayout(mainControlsLayout);
     leftColumnLayout->addLayout(seekTimeLayout);
+    leftColumnLayout->addWidget(shortcutsLabel);
 
     playlistWidget = new QListWidget(this);
     playlistWidget->setMinimumHeight(200);
@@ -330,7 +388,6 @@ void AudioPlayer::setupUi()
     connect(restartBtn, &QPushButton::clicked, this, &AudioPlayer::restartClicked);
 }
 
-
 void AudioPlayer::createNewPlaylistClicked()
 {
     bool ok;
@@ -355,25 +412,18 @@ void AudioPlayer::renamePlaylist(const QString& oldName, const QString& newName)
     if (oldName == newName) return;
     if (!allPlaylists.contains(oldName)) return;
 
-    // CRITICAL FIX: Update activePlaylist pointer BEFORE modifying the map
     bool wasActive = (activePlaylist && activePlaylist->name == oldName);
 
-    // Get a copy of the playlist data
     Playlist listToRename = allPlaylists[oldName];
-
-    // Update the name
     listToRename.name = newName;
 
-    // Remove old entry and insert new one
     allPlaylists.remove(oldName);
     allPlaylists.insert(newName, listToRename);
 
-    // Update the activePlaylist pointer to the new location in the map
     if (wasActive) {
         activePlaylist = &allPlaylists[newName];
     }
 
-    // Update the QComboBox
     int index = playlistSelector->findText(oldName);
     if (index != -1) {
         QIcon icon = playlistSelector->itemIcon(index);
@@ -381,7 +431,6 @@ void AudioPlayer::renamePlaylist(const QString& oldName, const QString& newName)
         playlistSelector->setItemIcon(index, icon);
     }
 }
-
 
 void AudioPlayer::renamePlaylistClicked()
 {
@@ -408,7 +457,6 @@ void AudioPlayer::renamePlaylistClicked()
         statusLabel->setText("تم تغيير اسم القائمة إلى: " + newName);
     }
 }
-
 
 void AudioPlayer::playlistSelectionChanged(int index)
 {
@@ -548,9 +596,13 @@ void AudioPlayer::deleteSurahClicked()
     }
 }
 
-
 bool AudioPlayer::loadTrack(SurahNode* node) {
-    if (node == nullptr) return false;
+    if (node == nullptr) {
+        qDebug() << "loadTrack: node is nullptr";
+        return false;
+    }
+
+    qDebug() << "Loading track:" << node->name;
     stopClicked();
 
     currentSurah = node;
@@ -562,6 +614,8 @@ bool AudioPlayer::loadTrack(SurahNode* node) {
     }
 
     ::ma_decoder_get_length_in_pcm_frames(&audioDecoder, &totalFrames);
+    qDebug() << "Total frames for this track:" << totalFrames;
+
     totalTimeLabel->setText(formatTime(totalFrames, audioDecoder.outputSampleRate));
     seekSlider->setRange(0, (int)totalFrames);
 
@@ -588,6 +642,8 @@ bool AudioPlayer::loadTrack(SurahNode* node) {
             break;
         }
     }
+
+    qDebug() << "Track loaded successfully. Has next?" << (currentSurah->next != nullptr);
 
     return true;
 }
@@ -642,19 +698,64 @@ void AudioPlayer::restartClicked() {
 }
 
 void AudioPlayer::updateProgress() {
-    if (isLoaded && isPlaying) {
-        ma_uint64 cursor;
-        ::ma_decoder_get_cursor_in_pcm_frames(&audioDecoder, &cursor);
+    if (!isLoaded || !isPlaying) {
+        return;
+    }
 
-        if (totalFrames > 0 && cursor >= (totalFrames - 1000)) {
-            nextClicked();
-            return;
+    ma_uint64 cursor;
+    ma_result result = ::ma_decoder_get_cursor_in_pcm_frames(&audioDecoder, &cursor);
+
+    if (result != MA_SUCCESS) {
+        return;
+    }
+
+    // Update UI
+    seekSlider->blockSignals(true);
+    seekSlider->setValue((int)cursor);
+    seekSlider->blockSignals(false);
+    currentTimeLabel->setText(formatTime(cursor, audioDecoder.outputSampleRate));
+
+    // Debug output every second (10 timer ticks at 100ms)
+    static int debugCounter = 0;
+    if (++debugCounter >= 10) {
+        qDebug() << "Progress: cursor=" << cursor << "totalFrames=" << totalFrames << "percentage=" << (cursor * 100.0 / totalFrames) << "%";
+        debugCounter = 0;
+    }
+
+    // Check if track finished - use a threshold to catch the end
+    if (totalFrames > 0 && cursor >= (totalFrames - 500)) {
+        qDebug() << "========================";
+        qDebug() << "TRACK ENDING DETECTED!";
+        qDebug() << "cursor:" << cursor << "totalFrames:" << totalFrames;
+        qDebug() << "currentSurah:" << (currentSurah ? currentSurah->name : "NULL");
+        qDebug() << "Has next:" << (currentSurah && currentSurah->next ? "YES" : "NO");
+
+        if (currentSurah && currentSurah->next) {
+            qDebug() << "Next track:" << currentSurah->next->name;
         }
+        qDebug() << "========================";
 
-        seekSlider->blockSignals(true);
-        seekSlider->setValue((int)cursor);
-        seekSlider->blockSignals(false);
-        currentTimeLabel->setText(formatTime(cursor, audioDecoder.outputSampleRate));
+        // Stop current playback
+        timer->stop();
+
+        // Move to next track
+        if (currentSurah != nullptr && currentSurah->next != nullptr) {
+            SurahNode* nextNode = currentSurah->next;
+            qDebug() << "Attempting to load next track:" << nextNode->name;
+
+            if (loadTrack(nextNode)) {
+                qDebug() << "Next track loaded, starting playback...";
+                playPauseClicked();
+            }
+            else {
+                qDebug() << "Failed to load next track!";
+            }
+        }
+        else {
+            qDebug() << "No more tracks, stopping...";
+            stopClicked();
+            statusLabel->setText("انتهت القائمة");
+        }
     }
 }
 
@@ -683,16 +784,21 @@ QString AudioPlayer::formatTime(ma_uint64 frames, ma_uint32 sampleRate) {
 
 void AudioPlayer::nextClicked() {
     if (currentSurah != nullptr && currentSurah->next != nullptr) {
-        if (loadTrack(currentSurah->next)) playPauseClicked();
+        if (loadTrack(currentSurah->next)) {
+            playPauseClicked();
+        }
     }
     else {
         stopClicked();
+        statusLabel->setText("انتهت القائمة");
     }
 }
 
 void AudioPlayer::prevClicked() {
     if (currentSurah != nullptr && currentSurah->prev != nullptr) {
-        if (loadTrack(currentSurah->prev)) playPauseClicked();
+        if (loadTrack(currentSurah->prev)) {
+            playPauseClicked();
+        }
     }
 }
 
