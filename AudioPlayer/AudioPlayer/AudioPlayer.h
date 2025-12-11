@@ -1,5 +1,4 @@
-﻿#pragma once
-
+#pragma once
 #include <QtWidgets/QWidget>
 #include <QListWidget>
 #include <QPushButton>
@@ -10,7 +9,7 @@
 #include <QComboBox>
 #include <QIcon>
 #include <QInputDialog>
-
+#include <QKeyEvent>
 #include "miniaudio.h"
 
 // --- 1. تعريف العقدة (SurahNode) ---
@@ -29,14 +28,15 @@ struct Playlist {
     QString iconPath;
 };
 
-
 class AudioPlayer : public QWidget
 {
     Q_OBJECT
-
 public:
     AudioPlayer(QWidget* parent = nullptr);
     ~AudioPlayer();
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
     void playPauseClicked();
@@ -58,11 +58,9 @@ private:
     void setupUi();
     void setupDefaultPlaylists();
     void renamePlaylist(const QString& oldName, const QString& newName);
-
     void addSurahToActiveList(QString name, QString filename, bool isAbsolutePath = false);
     bool deleteSurahFromActiveList(const QString& name);
     void deleteList(Playlist& list);
-
     bool loadTrack(SurahNode* node);
     void updateUiState();
     QString formatTime(ma_uint64 frames, ma_uint32 sampleRate);
@@ -72,6 +70,7 @@ private:
     QLabel* statusLabel;
     QLabel* currentTimeLabel;
     QLabel* totalTimeLabel;
+    QLabel* shortcutsLabel;
     QSlider* seekSlider;
     QSlider* volumeSlider;
     QPushButton* playBtn;
@@ -84,7 +83,6 @@ private:
     QPushButton* createPlaylistBtn;
     QPushButton* renamePlaylistBtn;
     QComboBox* playlistSelector;
-
     QLabel* albumArtLabel;
 
     // متغيرات النظام
@@ -98,9 +96,10 @@ private:
     ma_device_config deviceConfig;
     bool isLoaded = false;
     bool isPlaying = false;
-
     QTimer* timer;
     ma_uint64 totalFrames = 0;
+    ma_uint64 lastCursor = 0;
+    int stuckCounter = 0;
 
     static void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 };
